@@ -46,7 +46,7 @@ axis image
 title("Phase Error")
 
 error_in_wavelength = sqrt(mean((phi_recon-phi0).^2, "all")) / (2*pi);
-sprintf("Error: %3E wavelength", error_in_wavelength)
+sprintf("RMSE Error: %.1E wavelength", error_in_wavelength)
 
 
 

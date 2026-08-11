@@ -57,6 +57,11 @@ if any(i_noll < 1) || any(i_noll ~= round(i_noll))
     error('i_noll must contain positive integer Noll indices.');
 end
 
+if max(i_noll) <= 35
+    [Z, dZdX, dZdY, U] = rect_zernike_fast(X, Y, i_noll);
+    return
+end
+
 J = max(i_noll);
 
 %% Aperture mask

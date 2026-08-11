@@ -10,7 +10,9 @@ I_fft_filtered = I_fft .* mask;
 phi = angle(ifft2(ifftshift(I_fft_filtered)));
 phi = unwrap2D(phi);
 coef = rect_zernike_coef(X,Y,phi,1:n_noll);
-coef(2:3) = 0;
+coef_c = rect_zernike_coef(X,Y,2*pi*fc(1)*X+2*pi*fc(2)*Y,1:n_noll);
+coef_c([1,4:n_noll]) = 0;
+coef = coef - coef_c;
 phi = rect_zernike_recon(X, Y, coef);
 
 figure
