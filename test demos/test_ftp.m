@@ -1,24 +1,24 @@
 clear
 
 dx = 4.5;
-Nx = 1920;
-Ny = 1080;
+Nx = 256;
+Ny = 256;
 x = (-Nx/2:Nx/2-1) * dx;
 y = (-Ny/2:Ny/2-1) * dx;
 [X, Y] = meshgrid(x, y);
 
 coef0 = zeros(1, 20);
-coef0(12) = 1;
+coef0(11) = 1;
 coef0 = coef0 + 0.1*rand(1, 20);
 coef0(1:3) = 0;
 
 phi0 = rect_zernike_recon(X, Y, coef0);
 
-fx_carry = 1/.45*sind(.5);
+fx_carry = 1/.45*sind(1);
 I = abs(exp(1j*phi0) + exp(-1j*2*pi*fx_carry*X)).^2;
 % I = awgn(I, 3);
 
-phi_recon = ftp(X, Y, I, [fx_carry, 0], 0.01, 20);
+phi_recon = ftp2(X, Y, I, [fx_carry, 0], 0.02, 20);
 %%
 figure
 imagesc(x, y, I)

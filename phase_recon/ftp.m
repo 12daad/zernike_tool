@@ -10,6 +10,14 @@ I_fft_filtered = I_fft .* mask;
 phi = angle(ifft2(ifftshift(I_fft_filtered)));
 phi = unwrap2D(phi);
 coef = rect_zernike_coef(X,Y,phi,1:n_noll);
-coef(1:3) = 0;
+coef(2:3) = 0;
 phi = rect_zernike_recon(X, Y, coef);
+
+figure
+subplot(211)
+imagesc(fx, fy, log(1+abs(I_fft)))
+axis image
+subplot(212)
+imagesc(fx, fy, log(1+abs(I_fft_filtered)))
+axis image
 end
