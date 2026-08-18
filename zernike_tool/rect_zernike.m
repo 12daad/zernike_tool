@@ -94,6 +94,7 @@ end
 
 x = Xc / rho_max;
 y = Yc / rho_max;
+sprintf("[%.3f s] Coordinate normalization", toc)
 
 %% ========================================================================
 % Generate original Zernike basis
@@ -117,6 +118,7 @@ for j = 1:J
     dY0(:,j) = dZjdy(:);
 
 end
+sprintf("[%.3f s] Generate original Zernike basis", toc)
 
 %% ========================================================================
 % Modified Gram-Schmidt / QR orthogonalization
@@ -131,35 +133,10 @@ end
 %
 % ========================================================================
 
-Q = zeros(Npix, J);
-R = zeros(J, J);
+[~, R] = qr(Z0(:, 1:J), 0);
+R = R / sqrt(Npix);
 
-for k = 1:J
-
-    v = Z0(:,k);
-
-    % Modified Gram-Schmidt
-    for j = 1:k-1
-
-        R(j,k) = (Q(:,j)' * v) / Npix;
-
-        v = v - R(j,k) * Q(:,j);
-
-    end
-
-    R(k,k) = sqrt((v' * v) / Npix);
-
-    if R(k,k) < 1e-12
-
-        error(['Zernike basis becomes numerically dependent at mode ', ...
-               num2str(k), '. Reduce the number of modes or increase ', ...
-               'sampling density.']);
-
-    end
-
-    Q(:,k) = v / R(k,k);
-
-end
+sprintf("[%.3f s] Modified Gram-Schmidt / QR orthogonalization", toc)
 
 %% ========================================================================
 % Q has:
@@ -203,6 +180,8 @@ Zall  = reshape(Zall,  [size(X), J]);
 dXall = reshape(dXall, [size(X), J]);
 dYall = reshape(dYall, [size(X), J]);
 
+sprintf("[%.3f s] Restore image dimensions", toc)
+
 %% ========================================================================
 % Convert derivatives from normalized coordinates to physical coordinates
 %
@@ -224,6 +203,7 @@ dYall = dYall / rho_max;
 Z    = Zall(:,:,i_noll);
 dZdX = dXall(:,:,i_noll);
 dZdY = dYall(:,:,i_noll);
+sprintf("[%.3f s] Return requested modes", toc)
 
 end
 

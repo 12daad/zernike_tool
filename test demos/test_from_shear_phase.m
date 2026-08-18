@@ -19,11 +19,13 @@ phi0 = rect_zernike_recon(X, Y, coef0);
 phi_xshear = [phi0(:, n_xshear+1:end), ones(Ny, n_xshear).*phi0(:, end)];
 f_carry = 1/.45*sind(1);
 I_xshear = abs(exp(1j*phi0) + exp(1j*phi_xshear) .* exp(1j*2*pi*f_carry*X)).^2;
+I_xshear = awgn(I_xshear, 3);
 
 % phi_yshear = circshift(phi0, -n_yshear, 1);
 phi_yshear = [phi0(n_yshear+1:end, :); ones(n_yshear, Nx).*phi0(end, :)];
 fy_carry = 1/.45*sind(1);
 I_yshear = abs(exp(1j*phi0) + exp(1j*phi_yshear) .* exp(1j*2*pi*f_carry*Y)).^2;
+I_yshear = awgn(I_yshear, 3);
 
 phi_xgrad = ftp(X, Y, I_xshear, [f_carry, 0], 0.02, 15);
 phi_ygrad = ftp(X, Y, I_yshear, [0, f_carry], 0.02, 15);
