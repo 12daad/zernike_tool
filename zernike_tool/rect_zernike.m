@@ -110,8 +110,13 @@ for j = 1:J
 
     [n, m] = noll_index(j);
 
-    [Zj, dZjdx, dZjdy] = ...
-        zernike_cartesian(n, m, x(mask), y(mask));
+    if exist('zernike_cartesian_C', 'file')
+        [Zj, dZjdx, dZjdy] = ...
+            zernike_cartesian_C(n, m, x(mask), y(mask));
+    else
+        [Zj, dZjdx, dZjdy] = ...
+            zernike_cartesian(n, m, x(mask), y(mask));
+    end
 
     Z0(:,j)  = Zj(:);
     dX0(:,j) = dZjdx(:);
