@@ -1,8 +1,9 @@
-function [Z, dZdX, dZdY, U] = rect_zernike(X, Y, i_noll)
+function [Z, dZdX, dZdY] = rect_zernike(X, Y, i_noll, varargin)
 %RECT_ZERNIKE
 % Zernike polynomials orthonormalized on a rectangular aperture.
 %
 %   [Z, dZdX, dZdY, U] = rect_zernike(X, Y, i_noll)
+%   [Z, dZdX, dZdY, U] = rect_zernike(X, Y, i_noll, Name, Value, ...)
 %
 % INPUT
 %   X, Y
@@ -10,6 +11,11 @@ function [Z, dZdX, dZdY, U] = rect_zernike(X, Y, i_noll)
 %
 %   i_noll
 %       Noll indices of required modes.
+%
+%   Name-Value Parameters:
+%       'FastThreshold' - Maximum Noll index for fast path (default: 35)
+%       'Normalization' - Normalization type: 'mean' or 'integral' (default: 'mean')
+%       'Tolerance'     - Numerical tolerance for orthogonality check (default: 1e-12)
 %
 % OUTPUT
 %   Z
@@ -37,30 +43,22 @@ function [Z, dZdX, dZdY, U] = rect_zernike(X, Y, i_noll)
 %
 % -------------------------------------------------------------------------
 
-%% Input check
+%% Input parsing
+p = inputParser;
+p.FunctionName = 'rect_zernike';
 
-if nargin ~= 3
-    error('Usage: [Z,dZdX,dZdY,U] = rect_zernike(X,Y,i_noll)');
-end
+% 必需参数
+addRequired(p, 'X', @(x) isnumeric(x) && ismatrix(x));
+addRequired(p, 'Y', @(y) isnumeric(y) && ismatrix(y) && isequal(size(y), size(p.Results.X)));
+addRequired(p, 'i_noll', @(n) isnumeric(n) && isvector(n) && ...
+    all(floor(n) == n) && all(n >= 1));
 
-if ~isequal(size(X), size(Y))
-    error('X and Y must have the same size.');
-end
+% 可选参数
+addParameter(p, 'CFunc', false, @(x) islogical(x) && isscalar(x));
 
-if ~isnumeric(X) || ~isnumeric(Y)
-    error('X and Y must be numeric.');
-end
-
-i_noll = i_noll(:).';
-
-if any(i_noll < 1) || any(i_noll ~= round(i_noll))
-    error('i_noll must contain positive integer Noll indices.');
-end
-
-if max(i_noll) <= 35
-    [Z, dZdX, dZdY, U] = rect_zernike_fast(X, Y, i_noll);
-    return
-end
+% 解析
+parse(p, X, Y, i_noll, varargin{:});
+p_res = p.Results;
 
 J = max(i_noll);
 
@@ -110,17 +108,28 @@ for j = 1:J
 
     [n, m] = noll_index(j);
 
-    if exist('zernike_cartesian_C', 'file')
-        [Zj, dZjdx, dZjdy] = ...
-            zernike_cartesian_C(n, m, x(mask), y(mask));
+    if p_res.CFunc && exist('zernike_cartesian_C', 'file')
+        if nargout > 1
+            [Zj, dZjdx, dZjdy] = ...
+                zernike_cartesian_C(n, m, x(mask), y(mask));
+        else
+            Zj = ...
+                zernike_cartesian_C(n, m, x(mask), y(mask));
+        end
     else
-        [Zj, dZjdx, dZjdy] = ...
-            zernike_cartesian(n, m, x(mask), y(mask));
+        if nargout > 1
+            [Zj, dZjdx, dZjdy] = ...
+                zernike_cartesian(n, m, x(mask), y(mask));
+        else
+            Zj = zernike_cartesian(n, m, x(mask), y(mask));
+        end
     end
 
     Z0(:,j)  = Zj(:);
+    if nargout > 1
     dX0(:,j) = dZjdx(:);
     dY0(:,j) = dZjdy(:);
+    end
 
 end
 sprintf("[%.3f s] Generate original Zernike basis", toc)
@@ -164,26 +173,34 @@ U = inv(R);
 
 H = Z0 * U;
 
+if nargout > 1
 dHdx = dX0 * U;
 dHdy = dY0 * U;
+end
 
 %% ========================================================================
 % Restore image dimensions
 % ========================================================================
 
 Zall  = zeros(numel(X), J);
+if nargout > 1
 dXall = zeros(numel(X), J);
 dYall = zeros(numel(X), J);
+end
 
 idx = find(mask);
 
 Zall(idx,:)  = H;
+if nargout > 1
 dXall(idx,:) = dHdx;
 dYall(idx,:) = dHdy;
+end
 
 Zall  = reshape(Zall,  [size(X), J]);
+if nargout > 1
 dXall = reshape(dXall, [size(X), J]);
 dYall = reshape(dYall, [size(X), J]);
+end
 
 sprintf("[%.3f s] Restore image dimensions", toc)
 
@@ -197,19 +214,20 @@ sprintf("[%.3f s] Restore image dimensions", toc)
 %       d/dX = 1/rho_max * d/dx
 %
 % ========================================================================
-
+if nargout > 1
 dXall = dXall / rho_max;
 dYall = dYall / rho_max;
-
+end
 %% ========================================================================
 % Return requested modes
 % ========================================================================
 
 Z    = Zall(:,:,i_noll);
+if nargout > 1
 dZdX = dXall(:,:,i_noll);
 dZdY = dYall(:,:,i_noll);
+end
 sprintf("[%.3f s] Return requested modes", toc)
-
 end
 
 
@@ -286,6 +304,13 @@ r2 = x.^2 + y.^2;
 
 z_complex = x + 1i*y;
 
+zm = z_complex.^ma;
+if ma == 1
+    zm1 = ones(size(x));
+else
+    zm1 = z_complex.^(ma-1);
+end
+
 for k = 0:(n-ma)/2
 
     coeff = (-1)^k * ...
@@ -304,33 +329,32 @@ for k = 0:(n-ma)/2
 
         A = ones(size(x));
 
-        dAx = zeros(size(x));
-        dAy = zeros(size(x));
+        if nargout > 1
+            dAx = zeros(size(x));
+            dAy = zeros(size(x));
+        end
 
     else
 
-        zm = z_complex.^ma;
 
-        if ma == 1
-            zm1 = ones(size(x));
-        else
-            zm1 = z_complex.^(ma-1);
-        end
+
 
         if m > 0
 
             A = real(zm);
 
+        if nargout > 1
             dAx = ma * real(zm1);
             dAy = -ma * imag(zm1);
-
+        end
         else
 
             A = imag(zm);
 
+        if nargout > 1
             dAx = ma * imag(zm1);
             dAy = ma * real(zm1);
-
+        end
         end
 
     end
@@ -341,30 +365,32 @@ for k = 0:(n-ma)/2
 
         B = ones(size(x));
 
-        dBx = zeros(size(x));
-        dBy = zeros(size(x));
-
+        if nargout > 1
+            dBx = zeros(size(x));
+            dBy = zeros(size(x));
+        end
     else
 
         B = r2.^h;
 
         Bm1 = r2.^(h-1);
-
-        dBx = 2*h*x .* Bm1;
-        dBy = 2*h*y .* Bm1;
-
+        if nargout > 1
+            dBx = 2*h*x .* Bm1;
+            dBy = 2*h*y .* Bm1;
+        end
     end
 
     %% Accumulate
 
     Z = Z + coeff * A .* B;
 
-    dZdx = dZdx + coeff * ...
-        (dAx .* B + A .* dBx);
+    if nargout > 1
+        dZdx = dZdx + coeff * ...
+            (dAx .* B + A .* dBx);
 
-    dZdy = dZdy + coeff * ...
-        (dAy .* B + A .* dBy);
-
+        dZdy = dZdy + coeff * ...
+            (dAy .* B + A .* dBy);
+    end
 end
 
 end
@@ -379,3 +405,5 @@ else
     v = factorial(n);
 end
 end
+
+
