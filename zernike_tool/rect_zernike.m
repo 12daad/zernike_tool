@@ -55,6 +55,7 @@ addRequired(p, 'i_noll', @(n) isnumeric(n) && isvector(n) && ...
 
 % 可选参数
 addParameter(p, 'CFunc', false, @(x) islogical(x) && isscalar(x));
+addOptional(p, 'DispLog', false, @(x) islogical(x) && isscalar(x));
 
 % 解析
 parse(p, X, Y, i_noll, varargin{:});
@@ -92,8 +93,10 @@ end
 
 x = Xc / rho_max;
 y = Yc / rho_max;
-sprintf("[%.3f s] Coordinate normalization", toc)
 
+if p_res.DispLog
+fprintf("[%.3f s] Coordinate normalization\n", toc)
+end
 %% ========================================================================
 % Generate original Zernike basis
 % ========================================================================
@@ -132,8 +135,9 @@ for j = 1:J
     end
 
 end
-sprintf("[%.3f s] Generate original Zernike basis", toc)
-
+if p_res.DispLog
+fprintf("[%.3f s] Generate original Zernike basis\n", toc)
+end
 %% ========================================================================
 % Modified Gram-Schmidt / QR orthogonalization
 %
@@ -150,8 +154,9 @@ sprintf("[%.3f s] Generate original Zernike basis", toc)
 [~, R] = qr(Z0(:, 1:J), 0);
 R = R / sqrt(Npix);
 
-sprintf("[%.3f s] Modified Gram-Schmidt / QR orthogonalization", toc)
-
+if p_res.DispLog
+fprintf("[%.3f s] Modified Gram-Schmidt / QR orthogonalization\n", toc)
+end
 %% ========================================================================
 % Q has:
 %
@@ -202,8 +207,9 @@ dXall = reshape(dXall, [size(X), J]);
 dYall = reshape(dYall, [size(X), J]);
 end
 
-sprintf("[%.3f s] Restore image dimensions", toc)
-
+if p_res.DispLog
+fprintf("[%.3f s] Restore image dimensions\n", toc)
+end
 %% ========================================================================
 % Convert derivatives from normalized coordinates to physical coordinates
 %
@@ -227,7 +233,9 @@ if nargout > 1
 dZdX = dXall(:,:,i_noll);
 dZdY = dYall(:,:,i_noll);
 end
-sprintf("[%.3f s] Return requested modes", toc)
+    if p_res.DispLog
+    fprintf("[%.3f s] Return requested modes\n", toc)
+    end
 end
 
 
@@ -386,7 +394,7 @@ for k = 0:(n-ma)/2
 
     if nargout > 1
         dZdx = dZdx + coeff * ...
-            (dAx .* B + A .* dBx);
+            (dAx .* B + A .* dBx);Modified
 
         dZdy = dZdy + coeff * ...
             (dAy .* B + A .* dBy);
