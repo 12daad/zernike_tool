@@ -55,13 +55,37 @@ addRequired(p, 'i_noll', @(n) isnumeric(n) && isvector(n) && ...
 
 % 可选参数
 addParameter(p, 'CFunc', false, @(x) islogical(x) && isscalar(x));
-addOptional(p, 'DispLog', false, @(x) islogical(x) && isscalar(x));
+addParameter(p, 'DispLog', false, @(x) islogical(x) && isscalar(x));
+addParameter(p, 'SetCache', false, @(x) islogical(x) && isscalar(x));
+addParameter(p, 'EnableCache', false, @(x) islogical(x) && isscalar(x));
+addParameter(p, 'DisableCache', false, @(x) islogical(x) && isscalar(x));
 
 % 解析
 parse(p, X, Y, i_noll, varargin{:});
 p_res = p.Results;
 
 J = max(i_noll);
+
+%% Cache hit
+persistent cache
+if isempty(cache) || p_res.DisableCache
+    cache = struct();
+end
+
+if p_res.EnableCache
+    if isequal(cache.input.X, X) && isequal(cache.input.Y, Y)
+        if ismember(i_noll, cache.input.i_noll)
+            if p_res.DispLog
+                fprintf("Cache hit!\n")
+            end
+            Z = cache.output.Z(:,:,i_noll);
+            dZdX = cache.output.dZdX(:,:,i_noll);
+            dZdY = cache.output.dZdY(:,:,i_noll);
+            return;
+        end
+    end
+end
+
 
 %% Aperture mask
 
@@ -95,7 +119,7 @@ x = Xc / rho_max;
 y = Yc / rho_max;
 
 if p_res.DispLog
-fprintf("[%.3f s] Coordinate normalization\n", toc)
+    fprintf("[%.3f s] Coordinate normalization\n", toc)
 end
 %% ========================================================================
 % Generate original Zernike basis
@@ -130,13 +154,13 @@ for j = 1:J
 
     Z0(:,j)  = Zj(:);
     if nargout > 1
-    dX0(:,j) = dZjdx(:);
-    dY0(:,j) = dZjdy(:);
+        dX0(:,j) = dZjdx(:);
+        dY0(:,j) = dZjdy(:);
     end
 
 end
 if p_res.DispLog
-fprintf("[%.3f s] Generate original Zernike basis\n", toc)
+    fprintf("[%.3f s] Generate original Zernike basis\n", toc)
 end
 %% ========================================================================
 % Modified Gram-Schmidt / QR orthogonalization
@@ -155,7 +179,7 @@ end
 R = R / sqrt(Npix);
 
 if p_res.DispLog
-fprintf("[%.3f s] Modified Gram-Schmidt / QR orthogonalization\n", toc)
+    fprintf("[%.3f s] Modified Gram-Schmidt / QR orthogonalization\n", toc)
 end
 %% ========================================================================
 % Q has:
@@ -179,8 +203,8 @@ U = inv(R);
 H = Z0 * U;
 
 if nargout > 1
-dHdx = dX0 * U;
-dHdy = dY0 * U;
+    dHdx = dX0 * U;
+    dHdy = dY0 * U;
 end
 
 %% ========================================================================
@@ -189,26 +213,26 @@ end
 
 Zall  = zeros(numel(X), J);
 if nargout > 1
-dXall = zeros(numel(X), J);
-dYall = zeros(numel(X), J);
+    dXall = zeros(numel(X), J);
+    dYall = zeros(numel(X), J);
 end
 
 idx = find(mask);
 
 Zall(idx,:)  = H;
 if nargout > 1
-dXall(idx,:) = dHdx;
-dYall(idx,:) = dHdy;
+    dXall(idx,:) = dHdx;
+    dYall(idx,:) = dHdy;
 end
 
 Zall  = reshape(Zall,  [size(X), J]);
 if nargout > 1
-dXall = reshape(dXall, [size(X), J]);
-dYall = reshape(dYall, [size(X), J]);
+    dXall = reshape(dXall, [size(X), J]);
+    dYall = reshape(dYall, [size(X), J]);
 end
 
 if p_res.DispLog
-fprintf("[%.3f s] Restore image dimensions\n", toc)
+    fprintf("[%.3f s] Restore image dimensions\n", toc)
 end
 %% ========================================================================
 % Convert derivatives from normalized coordinates to physical coordinates
@@ -221,8 +245,8 @@ end
 %
 % ========================================================================
 if nargout > 1
-dXall = dXall / rho_max;
-dYall = dYall / rho_max;
+    dXall = dXall / rho_max;
+    dYall = dYall / rho_max;
 end
 %% ========================================================================
 % Return requested modes
@@ -230,12 +254,27 @@ end
 
 Z    = Zall(:,:,i_noll);
 if nargout > 1
-dZdX = dXall(:,:,i_noll);
-dZdY = dYall(:,:,i_noll);
+    dZdX = dXall(:,:,i_noll);
+    dZdY = dYall(:,:,i_noll);
 end
-    if p_res.DispLog
+if p_res.DispLog
     fprintf("[%.3f s] Return requested modes\n", toc)
+end
+
+if p_res.SetCache
+    if nargout < 3
+        error()
     end
+    if ~isequal(i_noll, 1:length(i_noll))
+        error()
+    end
+    cache.input.X = X;
+    cache.input.Y = Y;
+    cache.input.i_noll = i_noll;
+    cache.output.Z = Z;
+    cache.output.dZdX = dZdX;
+    cache.output.dZdY = dZdY;
+end
 end
 
 
@@ -351,18 +390,18 @@ for k = 0:(n-ma)/2
 
             A = real(zm);
 
-        if nargout > 1
-            dAx = ma * real(zm1);
-            dAy = -ma * imag(zm1);
-        end
+            if nargout > 1
+                dAx = ma * real(zm1);
+                dAy = -ma * imag(zm1);
+            end
         else
 
             A = imag(zm);
 
-        if nargout > 1
-            dAx = ma * imag(zm1);
-            dAy = ma * real(zm1);
-        end
+            if nargout > 1
+                dAx = ma * imag(zm1);
+                dAy = ma * real(zm1);
+            end
         end
 
     end
@@ -394,12 +433,15 @@ for k = 0:(n-ma)/2
 
     if nargout > 1
         dZdx = dZdx + coeff * ...
-            (dAx .* B + A .* dBx);Modified
+            (dAx .* B + A .* dBx);
 
         dZdy = dZdy + coeff * ...
             (dAy .* B + A .* dBy);
     end
 end
+
+
+
 
 end
 

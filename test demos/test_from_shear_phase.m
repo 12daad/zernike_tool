@@ -9,8 +9,8 @@ clc
 dx = 4.5;
 dy = dx;
 
-Nx = 256;
-Ny = 256;
+Nx = 512;
+Ny = 512;
 
 x = (-Nx/2:Nx/2-1) * dx;
 y = (-Ny/2:Ny/2-1) * dy;
