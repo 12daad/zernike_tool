@@ -56,9 +56,9 @@ addRequired(p, 'i_noll', @(n) isnumeric(n) && isvector(n) && ...
 % 可选参数
 addParameter(p, 'CFunc', false, @(x) islogical(x) && isscalar(x));
 addParameter(p, 'DispLog', false, @(x) islogical(x) && isscalar(x));
-addParameter(p, 'SetCache', false, @(x) islogical(x) && isscalar(x));
-addParameter(p, 'EnableCache', false, @(x) islogical(x) && isscalar(x));
-addParameter(p, 'DisableCache', false, @(x) islogical(x) && isscalar(x));
+addParameter(p, 'CacheRefresh', false, @(x) islogical(x) && isscalar(x));
+addParameter(p, 'CacheCheck', true, @(x) islogical(x) && isscalar(x));
+addParameter(p, 'CacheClear', false, @(x) islogical(x) && isscalar(x));
 
 % 解析
 parse(p, X, Y, i_noll, varargin{:});
@@ -68,21 +68,21 @@ J = max(i_noll);
 
 %% Cache hit
 persistent cache
-if isempty(cache) || p_res.DisableCache
+if isempty(cache) || p_res.CacheClear
     cache = struct();
+    cache.useful = false;
 end
 
-if p_res.EnableCache
-    if isequal(cache.input.X, X) && isequal(cache.input.Y, Y)
-        if ismember(i_noll, cache.input.i_noll)
-            if p_res.DispLog
-                fprintf("Cache hit!\n")
-            end
-            Z = cache.output.Z(:,:,i_noll);
-            dZdX = cache.output.dZdX(:,:,i_noll);
-            dZdY = cache.output.dZdY(:,:,i_noll);
-            return;
+if p_res.CacheCheck && cache.useful ...
+    && isequal(cache.input.X, X) && isequal(cache.input.Y, Y)
+    if ismember(i_noll, cache.input.i_noll)
+        if p_res.DispLog
+            fprintf("Cache hit!\n")
         end
+        Z = cache.output.Z(:,:,i_noll);
+        dZdX = cache.output.dZdX(:,:,i_noll);
+        dZdY = cache.output.dZdY(:,:,i_noll);
+        return;
     end
 end
 
@@ -261,7 +261,7 @@ if p_res.DispLog
     fprintf("[%.3f s] Return requested modes\n", toc)
 end
 
-if p_res.SetCache
+if p_res.CacheRefresh
     if nargout < 3
         error()
     end
@@ -274,6 +274,7 @@ if p_res.SetCache
     cache.output.Z = Z;
     cache.output.dZdX = dZdX;
     cache.output.dZdY = dZdY;
+    cache.useful = true;
 end
 end
 
@@ -282,178 +283,178 @@ end
 % Noll index
 % ========================================================================
 
-function [n, m] = noll_index(j)
+    function [n, m] = noll_index(j)
 
-n = 0;
-count = 0;
+        n = 0;
+        count = 0;
 
-while j > count + n + 1
+        while j > count + n + 1
 
-    count = count + n + 1;
-    n = n + 1;
+            count = count + n + 1;
+            n = n + 1;
 
-end
+        end
 
-k = j - count;
+        k = j - count;
 
-if mod(n,2) == 0
+        if mod(n,2) == 0
 
-    % Even n:
-    %
-    % n = 0 :  0
-    % n = 2 :  0 -2 2
-    % n = 4 :  0 -2 2 -4 4
+            % Even n:
+            %
+            % n = 0 :  0
+            % n = 2 :  0 -2 2
+            % n = 4 :  0 -2 2 -4 4
 
-    if k == 1
+            if k == 1
 
-        m = 0;
+                m = 0;
 
-    else
+            else
 
-        kk = k - 1;
+                kk = k - 1;
 
-        if mod(kk,2) == 1
-            m = -2 * ceil(kk/2);
+                if mod(kk,2) == 1
+                    m = -2 * ceil(kk/2);
+                else
+                    m =  2 * (kk/2);
+                end
+
+            end
+
         else
-            m =  2 * (kk/2);
+
+            % Odd n:
+            %
+            % n = 1 : -1 1
+            % n = 3 : -3 -1 1 3
+            % n = 5 : -5 -3 -1 1 3 5
+
+            m = -n + 2*(k-1);
+
         end
 
     end
-
-else
-
-    % Odd n:
-    %
-    % n = 1 : -1 1
-    % n = 3 : -3 -1 1 3
-    % n = 5 : -5 -3 -1 1 3 5
-
-    m = -n + 2*(k-1);
-
-end
-
-end
 
 
 %% ========================================================================
 % Cartesian Zernike polynomial
 % ========================================================================
 
-function [Z, dZdx, dZdy] = zernike_cartesian(n, m, x, y)
+    function [Z, dZdx, dZdy] = zernike_cartesian(n, m, x, y)
 
-ma = abs(m);
+        ma = abs(m);
 
-Z    = zeros(size(x));
-dZdx = zeros(size(x));
-dZdy = zeros(size(x));
+        Z    = zeros(size(x));
+        dZdx = zeros(size(x));
+        dZdy = zeros(size(x));
 
-r2 = x.^2 + y.^2;
+        r2 = x.^2 + y.^2;
 
-z_complex = x + 1i*y;
+        z_complex = x + 1i*y;
 
-zm = z_complex.^ma;
-if ma == 1
-    zm1 = ones(size(x));
-else
-    zm1 = z_complex.^(ma-1);
-end
-
-for k = 0:(n-ma)/2
-
-    coeff = (-1)^k * ...
-        cached_factorial(n-k) / ...
-        (cached_factorial(k) * ...
-        cached_factorial((n+ma)/2-k) * ...
-        cached_factorial((n-ma)/2-k));
-
-    p = n - 2*k;
-
-    h = (p-ma)/2;
-
-    %% Angular term
-
-    if ma == 0
-
-        A = ones(size(x));
-
-        if nargout > 1
-            dAx = zeros(size(x));
-            dAy = zeros(size(x));
-        end
-
-    else
-
-
-
-
-        if m > 0
-
-            A = real(zm);
-
-            if nargout > 1
-                dAx = ma * real(zm1);
-                dAy = -ma * imag(zm1);
-            end
+        zm = z_complex.^ma;
+        if ma == 1
+            zm1 = ones(size(x));
         else
+            zm1 = z_complex.^(ma-1);
+        end
 
-            A = imag(zm);
+        for k = 0:(n-ma)/2
+
+            coeff = (-1)^k * ...
+                cached_factorial(n-k) / ...
+                (cached_factorial(k) * ...
+                cached_factorial((n+ma)/2-k) * ...
+                cached_factorial((n-ma)/2-k));
+
+            p = n - 2*k;
+
+            h = (p-ma)/2;
+
+            %% Angular term
+
+            if ma == 0
+
+                A = ones(size(x));
+
+                if nargout > 1
+                    dAx = zeros(size(x));
+                    dAy = zeros(size(x));
+                end
+
+            else
+
+
+
+
+                if m > 0
+
+                    A = real(zm);
+
+                    if nargout > 1
+                        dAx = ma * real(zm1);
+                        dAy = -ma * imag(zm1);
+                    end
+                else
+
+                    A = imag(zm);
+
+                    if nargout > 1
+                        dAx = ma * imag(zm1);
+                        dAy = ma * real(zm1);
+                    end
+                end
+
+            end
+
+            %% Radial term
+
+            if h == 0
+
+                B = ones(size(x));
+
+                if nargout > 1
+                    dBx = zeros(size(x));
+                    dBy = zeros(size(x));
+                end
+            else
+
+                B = r2.^h;
+
+                Bm1 = r2.^(h-1);
+                if nargout > 1
+                    dBx = 2*h*x .* Bm1;
+                    dBy = 2*h*y .* Bm1;
+                end
+            end
+
+            %% Accumulate
+
+            Z = Z + coeff * A .* B;
 
             if nargout > 1
-                dAx = ma * imag(zm1);
-                dAy = ma * real(zm1);
+                dZdx = dZdx + coeff * ...
+                    (dAx .* B + A .* dBx);
+
+                dZdy = dZdy + coeff * ...
+                    (dAy .* B + A .* dBy);
             end
         end
 
+
+
+
     end
 
-    %% Radial term
 
-    if h == 0
-
-        B = ones(size(x));
-
-        if nargout > 1
-            dBx = zeros(size(x));
-            dBy = zeros(size(x));
-        end
-    else
-
-        B = r2.^h;
-
-        Bm1 = r2.^(h-1);
-        if nargout > 1
-            dBx = 2*h*x .* Bm1;
-            dBy = 2*h*y .* Bm1;
+    function v = cached_factorial(n)
+        cache = [1 1	2	6	24	120	720	5040	40320	362880	3628800	39916800	479001600	6.227020800000000e+09	8.717829120000000e+10	1.307674368000000e+12	2.092278988800000e+13	3.556874280960000e+14	6.402373705728000e+15	1.216451004088320e+17	2.432902008176640e+18	5.109094217170944e+19	1.124000727777608e+21	2.585201673888498e+22	6.204484017332394e+23	1.551121004333099e+25	4.032914611266057e+26	1.088886945041835e+28	3.048883446117138e+29	8.841761993739701e+30	2.652528598121910e+32	8.222838654177922e+33	2.631308369336935e+35	8.683317618811886e+36	2.952327990396041e+38	1.033314796638614e+40	3.719933267899012e+41	1.376375309122634e+43	5.230226174666010e+44	2.039788208119744e+46	8.159152832478977e+47	3.345252661316380e+49	1.405006117752880e+51	6.041526306337383e+52	2.658271574788449e+54	1.196222208654802e+56	5.502622159812088e+57	2.586232415111682e+59	1.241391559253607e+61	6.082818640342675e+62	3.041409320171338e+64];
+        index = n + 1;
+        if index <= length(cache)
+            v = cache(index);
+        else
+            v = factorial(n);
         end
     end
-
-    %% Accumulate
-
-    Z = Z + coeff * A .* B;
-
-    if nargout > 1
-        dZdx = dZdx + coeff * ...
-            (dAx .* B + A .* dBx);
-
-        dZdy = dZdy + coeff * ...
-            (dAy .* B + A .* dBy);
-    end
-end
-
-
-
-
-end
-
-
-function v = cached_factorial(n)
-cache = [1 1	2	6	24	120	720	5040	40320	362880	3628800	39916800	479001600	6.227020800000000e+09	8.717829120000000e+10	1.307674368000000e+12	2.092278988800000e+13	3.556874280960000e+14	6.402373705728000e+15	1.216451004088320e+17	2.432902008176640e+18	5.109094217170944e+19	1.124000727777608e+21	2.585201673888498e+22	6.204484017332394e+23	1.551121004333099e+25	4.032914611266057e+26	1.088886945041835e+28	3.048883446117138e+29	8.841761993739701e+30	2.652528598121910e+32	8.222838654177922e+33	2.631308369336935e+35	8.683317618811886e+36	2.952327990396041e+38	1.033314796638614e+40	3.719933267899012e+41	1.376375309122634e+43	5.230226174666010e+44	2.039788208119744e+46	8.159152832478977e+47	3.345252661316380e+49	1.405006117752880e+51	6.041526306337383e+52	2.658271574788449e+54	1.196222208654802e+56	5.502622159812088e+57	2.586232415111682e+59	1.241391559253607e+61	6.082818640342675e+62	3.041409320171338e+64];
-index = n + 1;
-if index <= length(cache)
-    v = cache(index);
-else
-    v = factorial(n);
-end
-end
 
 
