@@ -26,9 +26,11 @@ phi0 = rect_zernike_recon(X, Y, coef0);
 
 fx_carry = 1/.45*sind(1);
 I = abs(exp(1j*phi0) + exp(-1j*2*pi*fx_carry*X)).^2;
-% I = awgn(I, 3);
+refrection = exp(-(X.^2+Y.^2)/500^2);
+I = I .* refrection;
+% I = awgn(refrection.*I, 3);
 
-phi_recon = ftp(X, Y, I, [fx_carry, 0], 0.02, 20);
+phi_recon = ftp(X, Y, I, [fx_carry, 0], 0.02, 20, refrection);
 coef = rect_zernike_coef(X, Y, phi_recon, 1:15);
 %%
 figure
