@@ -33,7 +33,7 @@ coef = rect_zernike_coef(X, Y, phi_recon, 1:15);
 %%
 figure
 imagesc(x, y, I)
-colormap("gray")
+colormap("hot")
 colorbar
 grid off
 axis image
@@ -51,22 +51,17 @@ grid on
 
 
 figure
-subplot(311)
+subplot(211)
 imagesc(x, y, phi0)
-colormap("hot")
+colormap("gray")
 colorbar
 axis image
 title("Phase Ground")
-subplot(312)
+subplot(212)
 imagesc(x, y, phi_recon)
 colorbar
 axis image
 title("Phase Recovered")
-subplot(313)
-imagesc(x, y, abs(phi_recon-phi0))
-colorbar
-axis image
-title("Phase Error")
 
 error_in_wavelength = sqrt(mean((phi_recon-phi0).^2, "all")) / (2*pi);
 sprintf("RMSE Error: %.1E wavelength", error_in_wavelength)

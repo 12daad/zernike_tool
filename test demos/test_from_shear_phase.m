@@ -269,7 +269,7 @@ for k = 1:n_shear_count
 
     axis image
     colorbar
-    colormap("gray")
+    colormap("hot")
 
     xlabel('x')
     ylabel('y')
@@ -287,13 +287,13 @@ end
 
 figure
 
-subplot(311)
+subplot(211)
 
 imagesc(x, y, phi0)
 
 axis image
 colorbar
-colormap("hot")
+colormap("gray")
 
 xlabel('x')
 ylabel('y')
@@ -301,7 +301,7 @@ ylabel('y')
 title('Phase Ground Truth')
 
 
-subplot(312)
+subplot(212)
 
 imagesc(x, y, phi_fit)
 
@@ -314,17 +314,6 @@ ylabel('y')
 title('Phase Recovered')
 
 
-subplot(313)
-
-imagesc(x, y, abs(phi_fit - phi0))
-
-axis image
-colorbar
-
-xlabel('x')
-ylabel('y')
-
-title('Absolute Phase Error')
 
 %% ============================================================
 % RMSE
