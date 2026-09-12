@@ -16,21 +16,21 @@ coef0(7)  = 0.15;
 coef0(8)  = -0.10;
 coef0(9)  = 0.20;
 coef0(10) = -0.15;
-coef0(11) = 1.00;
+coef0(11) = 0.10;
 coef0(12) = 0.25;
 coef0(13) = -0.20;
 coef0(14) = 0.10;
 coef0(15) = 0.15;
 
-phi0 = rect_zernike_recon(X, Y, coef0);
+phi0 = rect_zernike_recon(X, Y, 5*coef0);
 
-fx_carry = 1/.45*sind(1);
-I = abs(exp(1j*phi0) + exp(-1j*2*pi*fx_carry*X)).^2;
+fx_carry = 1/.45*sind(1.1);
+I = abs(exp(1j*phi0) + exp(1j*2*pi*fx_carry*X)).^2;
 refrection = exp(-(X.^2+Y.^2)/500^2);
 I = I .* refrection;
 % I = awgn(refrection.*I, 3);
 
-phi_recon = ftp(X, Y, I, [fx_carry, 0], 0.02, 20, refrection);
+phi_recon = ftp(X, Y, I, [-fx_carry, 0], 0.02, 20, refrection, DispLog=true);
 coef = rect_zernike_coef(X, Y, phi_recon, 1:15);
 %%
 figure
@@ -53,17 +53,25 @@ grid on
 
 
 figure
-subplot(211)
+subplot(311)
 imagesc(x, y, phi0)
 colormap("gray")
 colorbar
 axis image
 title("Phase Ground")
-subplot(212)
+subplot(312)
 imagesc(x, y, phi_recon)
 colorbar
 axis image
 title("Phase Recovered")
+subplot(313)
+imagesc(x, y, abs(phi0-phi_recon))
+colormap("gray")
+colorbar
+axis image
+title("Abs. Error")
+
+
 
 error_in_wavelength = sqrt(mean((phi_recon-phi0).^2, "all")) / (2*pi);
 sprintf("RMSE Error: %.1E wavelength", error_in_wavelength)
