@@ -225,7 +225,7 @@ class ZernikeCorrectorApp:
         self._gray_response_text.grid(row=1, column=1, sticky="ew", pady=(8, 0))
         self._gray_response_text.insert("1.0", DEFAULT_GRAY_RESPONSE)
 
-        ttk.Label(controls, text="相位值（≥0，可超过2π）：").grid(
+        ttk.Label(controls, text="相位值（≥0）：").grid(
             row=2,
             column=0,
             sticky="nw",
