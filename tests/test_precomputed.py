@@ -160,9 +160,9 @@ class StandardModeCacheTests(TestCase):
         modes = np.arange(12, dtype=np.float32).reshape(2, 3, 2)
         coefficients = np.array([0.5, -0.25], dtype=np.float64)
         with patch.object(
-                precomputed,
-                "load_standard_mode_cache",
-                return_value=modes,
+            precomputed,
+            "load_standard_mode_cache",
+            return_value=modes,
         ):
             actual = precomputed.reconstruct_standard_aberration(coefficients)
         expected = modes[..., 0] * 0.5 + modes[..., 1] * -0.25
@@ -192,9 +192,9 @@ class StandardModeCacheTests(TestCase):
             )
         )
         with patch.object(
-                precomputed,
-                "load_standard_mode_cache",
-                return_value=None,
+            precomputed,
+            "load_standard_mode_cache",
+            return_value=None,
         ):
             self.assertIsNone(
                 precomputed.reconstruct_standard_aberration(np.array([0.0]))

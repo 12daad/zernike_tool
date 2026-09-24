@@ -79,9 +79,9 @@ class _DnDWidget(Protocol):
         """Register a mouse button and outgoing data types."""
 
     def dnd_bind(
-            self,
-            sequence: str,
-            callback: Callable[[object], object],
+        self,
+        sequence: str,
+        callback: Callable[[object], object],
     ) -> str | None:
         """Bind a callback to a TkDND virtual event."""
 
@@ -140,11 +140,11 @@ class ZernikeCorrectorApp:
     """Manage the widgets and user actions of the correction tool."""
 
     def __init__(
-            self,
-            root: tk.Tk,
-            initial_directory: Path | None = None,
-            settings_path: Path | None = None,
-            cache_path: Path | None = None,
+        self,
+        root: tk.Tk,
+        initial_directory: Path | None = None,
+        settings_path: Path | None = None,
+        cache_path: Path | None = None,
     ) -> None:
         self._root = root
         self._initial_directory = (initial_directory or Path.cwd()).resolve()
@@ -358,8 +358,8 @@ class ZernikeCorrectorApp:
         log_scroll.grid(row=0, column=1, sticky="ns")
 
     def _configure_drag_and_drop(
-            self,
-            import_targets: Iterable[tk.Misc],
+        self,
+        import_targets: Iterable[tk.Misc],
     ) -> None:
         for target in import_targets:
             drop_target = cast(_DnDWidget, cast(object, target))
@@ -372,8 +372,8 @@ class ZernikeCorrectorApp:
 
     @staticmethod
     def _build_image_panel(
-            parent: ttk.PanedWindow,
-            title: str,
+        parent: ttk.PanedWindow,
+        title: str,
     ) -> tuple[ttk.LabelFrame, tk.Listbox, ttk.Label]:
         panel = ttk.LabelFrame(parent, text=title, padding=8)
         panel.rowconfigure(1, weight=1)
@@ -567,8 +567,8 @@ class ZernikeCorrectorApp:
             )
 
     def _drag_corrected_images(
-            self,
-            _event: object,
+        self,
+        _event: object,
     ) -> tuple[str, str, tuple[str, ...]]:
         selection = self._pending_drag_selection or self._selected_indices(
             self._corrected_list
@@ -584,8 +584,8 @@ class ZernikeCorrectorApp:
 
         self._drag_export_sequence += 1
         drag_directory = (
-                Path(self._drag_export_directory.name)
-                / f"drag-{self._drag_export_sequence:04d}"
+            Path(self._drag_export_directory.name)
+            / f"drag-{self._drag_export_sequence:04d}"
         )
         try:
             drag_directory.mkdir(parents=True, exist_ok=False)
@@ -630,9 +630,9 @@ class ZernikeCorrectorApp:
         )
         row_bounds = self._corrected_list.bbox(pressed_index)
         pressed_selected_row = (
-                row_bounds is not None
-                and row_bounds[1] <= event.y < row_bounds[1] + row_bounds[3]
-                and pressed_index in selection
+            row_bounds is not None
+            and row_bounds[1] <= event.y < row_bounds[1] + row_bounds[3]
+            and pressed_index in selection
         )
         self._pending_drag_selection = selection if pressed_selected_row else ()
 
@@ -686,10 +686,10 @@ class ZernikeCorrectorApp:
         self._root.after(50, self._poll_correction_queue)
 
     def _run_correction(
-            self,
-            records: list[_ImageRecord],
-            coefficients: NDArray[np.float64],
-            response: NDArray[np.float64],
+        self,
+        records: list[_ImageRecord],
+        coefficients: NDArray[np.float64],
+        response: NDArray[np.float64],
     ) -> None:
         total = len(records)
         for completed, record in enumerate(records, start=1):
@@ -774,8 +774,8 @@ class ZernikeCorrectorApp:
         self._corrected_list.insert(tk.END, f"{record.source.stem}_校正后")
 
     def _delete_selected_imported(
-            self,
-            _event: tk.Event[tk.Misc] | None = None,
+        self,
+        _event: tk.Event[tk.Misc] | None = None,
     ) -> None:
         if self._correction_is_running():
             messagebox.showinfo(
@@ -802,8 +802,8 @@ class ZernikeCorrectorApp:
         logger.info("已从导入列表删除 %d 张图片：%s", len(names), ", ".join(names))
 
     def _delete_selected_corrected(
-            self,
-            _event: tk.Event[tk.Misc] | None = None,
+        self,
+        _event: tk.Event[tk.Misc] | None = None,
     ) -> None:
         if self._correction_is_running():
             messagebox.showinfo(
@@ -888,8 +888,8 @@ class ZernikeCorrectorApp:
 
     @staticmethod
     def _show_preview(
-            label: ttk.Label,
-            pixels: NDArray[np.float64] | NDArray[np.uint8],
+        label: ttk.Label,
+        pixels: NDArray[np.float64] | NDArray[np.uint8],
     ) -> ImageTk.PhotoImage:
         image = Image.fromarray(np.asarray(pixels, dtype=np.uint8))
         image.thumbnail(_PREVIEW_SIZE, Image.Resampling.LANCZOS)
@@ -924,7 +924,7 @@ class ZernikeCorrectorApp:
 
     def _correction_is_running(self) -> bool:
         return (
-                self._correction_future is not None and not self._correction_future.done()
+            self._correction_future is not None and not self._correction_future.done()
         )
 
     def _close_now(self) -> None:

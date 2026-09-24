@@ -23,14 +23,14 @@ STANDARD_CACHE_SHAPE: Final = (
     STANDARD_NOLL_COUNT,
 )
 STANDARD_CACHE_PATH: Final = (
-        Path(__file__).with_name("data") / "rect_zernike_1920x1080_noll_1_30_float32.npy"
+    Path(__file__).with_name("data") / "rect_zernike_1920x1080_noll_1_30_float32.npy"
 )
 _Float32Array = NDArray[np.float32]
 
 
 @lru_cache(maxsize=2)
 def load_standard_mode_cache(
-        filename: str | Path | None = None,
+    filename: str | Path | None = None,
 ) -> _Float32Array | None:
     """Load and validate the standard mode cache using read-only mmap.
 
@@ -142,7 +142,7 @@ def _load_mode_cache(path: Path) -> _Float32Array | None:
 
 
 def reconstruct_standard_aberration(
-        coefficients: NDArray[np.float64],
+    coefficients: NDArray[np.float64],
 ) -> _Float32Array | None:
     """Reconstruct a 1920x1080 aberration from precomputed modes.
 

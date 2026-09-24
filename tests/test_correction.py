@@ -193,8 +193,8 @@ class ImageCalibrationTests(TestCase):
         )
         aberration = np.full(image.shape, 0.2, dtype=np.float32)
         with patch(
-                "zernike_tool.app.correction._cached_aberration",
-                return_value=aberration,
+            "zernike_tool.app.correction._cached_aberration",
+            return_value=aberration,
         ):
             actual = calibrate_image(image, [0.0], response)
 
@@ -252,14 +252,14 @@ class ImageCalibrationTests(TestCase):
         """Report whether startup successfully mapped the standard cache."""
 
         with patch(
-                "zernike_tool.app.correction.load_standard_mode_cache",
-                return_value=np.ones(1),
+            "zernike_tool.app.correction.load_standard_mode_cache",
+            return_value=np.ones(1),
         ) as load:
             self.assertTrue(preload_correction_cache())
             load.assert_called_once_with(None)
         with patch(
-                "zernike_tool.app.correction.load_standard_mode_cache",
-                return_value=None,
+            "zernike_tool.app.correction.load_standard_mode_cache",
+            return_value=None,
         ) as load:
             filename = Path("custom.npy")
             self.assertFalse(preload_correction_cache(filename))

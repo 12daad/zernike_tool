@@ -100,8 +100,8 @@ class AppSettingsTests(TestCase):
                 with self.subTest(contents=contents):
                     filename.write_text(contents, encoding="utf-8")
                     with self.assertLogs(
-                            "zernike_tool.app.settings",
-                            level="WARNING",
+                        "zernike_tool.app.settings",
+                        level="WARNING",
                     ):
                         actual = load_settings(filename, root)
                     self.assertEqual(actual, expected)
