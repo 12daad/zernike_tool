@@ -4,7 +4,6 @@ __pycache__/
 *.py[cod]
 *.log
 *.tmp
-*.npy
 .coverage
 .ruff_cache/
 .mypy_cache/
@@ -16,3 +15,6 @@ MATLAB_Ref/
 *.egg-info/
 prompt.md
 skill.md
+/zernike_tool/data/
+~$*
+/exp data.xlsx

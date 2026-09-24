@@ -20,13 +20,13 @@ class ResponseDataTests(TestCase):
         with TemporaryDirectory() as directory:
             filename = Path(directory) / "response.csv"
             filename.write_text(
-                "\ufeffGRAY, phase\n\n# measured values\n255, 6.27\n0, 0\n64, 1.51\n",
+                "\ufeffGRAY, phase\n\n# measured values\n255, 6.5\n0, 0\n64, 1.51\n",
                 encoding="utf-8",
             )
             actual = response_data(filename)
 
         np.testing.assert_array_equal(actual[:, 0], [0, 64, 255])
-        np.testing.assert_allclose(actual[:, 1], [0, 1.51, 6.27])
+        np.testing.assert_allclose(actual[:, 1], [0, 1.51, 6.5])
         self.assertEqual(actual.dtype, np.float64)
 
     def test_reads_headerless_and_whitespace_separated_files(self) -> None:
@@ -67,12 +67,12 @@ class ResponseDataTests(TestCase):
                         response_data(filename)
 
     def test_rejects_invalid_response_values(self) -> None:
-        """Reject duplicates, non-finite values, and values outside bounds."""
+        """Reject duplicates, non-finite values, and invalid lower bounds."""
 
         cases = [
             ("0,0\n0,1\n", "duplicate gray"),
             ("0,0\n256,1\n", "gray levels"),
-            ("0,0\n255,7\n", "phases"),
+            ("0,0\n255,-0.1\n", "nonnegative"),
             ("0,0\n255,nan\n", "finite values"),
         ]
         with TemporaryDirectory() as directory:
@@ -85,7 +85,7 @@ class ResponseDataTests(TestCase):
 
 
 class ResponseInterpolationTests(TestCase):
-    """Verify forward and inverse piecewise-linear interpolation."""
+    """Verify linear design mapping and measured inverse interpolation."""
 
     def setUp(self) -> None:
         """Create a sparse, deliberately unsorted response curve."""
@@ -98,12 +98,12 @@ class ResponseInterpolationTests(TestCase):
             ]
         )
 
-    def test_gray_to_phase_interpolates_and_clamps(self) -> None:
-        """Interpolate missing gray levels and clamp outside measurements."""
+    def test_gray_to_phase_uses_linear_design_mapping(self) -> None:
+        """Ignore measured phases and map the full gray range onto pi."""
 
         gray = np.array([[0, 32, 64], [96, 192, 255]], dtype=np.uint8)
         actual = gray2phase(gray, self.data)
-        expected = np.array([[0.5, 0.5, 1.25], [2.0, 5.0, 5.0]])
+        expected = gray.astype(np.float64) / 255 * np.pi
         np.testing.assert_allclose(actual, expected)
         self.assertEqual(actual.shape, gray.shape)
         self.assertEqual(actual.dtype, np.float64)
@@ -122,6 +122,15 @@ class ResponseInterpolationTests(TestCase):
             phase2gray(np.array([0.0, np.pi, 2 * np.pi]), decreasing),
             [255.0, 127.5, 0.0],
         )
+
+    def test_phase_to_gray_truncates_response_above_two_pi(self) -> None:
+        """Interpolate a cutoff gray below 255 at the two-pi crossing."""
+
+        response = np.array([[0.0, 0.0], [200.0, 5.8], [255.0, 6.6]])
+        cutoff_gray = 200 + (2 * np.pi - 5.8) / (6.6 - 5.8) * 55
+        actual = phase2gray(np.array([5.8, 2 * np.pi]), response)
+        np.testing.assert_allclose(actual, [200.0, cutoff_gray])
+        self.assertLess(float(actual[-1]), 255)
 
     def test_phase_to_gray_rejects_non_monotonic_response(self) -> None:
         """Reject inverse mappings that have no unique solution."""
@@ -199,7 +208,7 @@ class ResponseInterpolationTests(TestCase):
                 "finite",
             ),
             (np.array([[-1.0, 0.0], [1.0, 1.0]]), ValueError, "gray levels"),
-            (np.array([[0.0, 0.0], [1.0, 7.0]]), ValueError, "phases"),
+            (np.array([[0.0, 0.0], [1.0, -0.1]]), ValueError, "nonnegative"),
             (np.array([[1.0, 0.0], [1.0, 1.0]]), ValueError, "duplicate gray"),
         ]
         for data, error_type, message in cases:

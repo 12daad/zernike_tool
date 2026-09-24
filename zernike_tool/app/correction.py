@@ -11,7 +11,7 @@ from typing import Final
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from zernike_tool import rect_zernike_recon
+from zernike_tool import gray2phase, phase2gray, rect_zernike_recon
 from zernike_tool.precomputed import (
     STANDARD_HEIGHT,
     STANDARD_NOLL_COUNT,
@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 _COEFFICIENT_SEPARATOR: Final = re.compile(r"[\s,]+")
 _SUPPORTED_EXPORT_FORMATS: Final = frozenset({"bmp", "jpg", "png"})
 _TWO_PI: Final = 2 * np.pi
+_DEFAULT_RESPONSE: Final = np.asarray(
+    [[0.0, 0.0], [255.0, _TWO_PI]],
+    dtype=np.float64,
+)
 _FloatArray = NDArray[np.float64]
 _ByteArray = NDArray[np.uint8]
 _Float32Array = NDArray[np.float32]
@@ -57,6 +61,45 @@ def parse_coefficients(text: str) -> _FloatArray:
     if not np.all(np.isfinite(coefficients)):
         raise ValueError("Zernike 系数必须是有限数值")
     return coefficients
+
+
+def parse_response_curve(gray_text: str, phase_text: str) -> _FloatArray:
+    """Parse and validate a gray-to-phase response entered in two text boxes.
+
+    Values may be separated by commas, spaces, tabs, or newlines.  Gray
+    samples are sorted into ascending order before the response is returned.
+    The corresponding phase samples must be strictly monotonic so that the
+    inverse phase-to-gray mapping is unique.
+
+    Args:
+        gray_text: Gray samples in the inclusive range ``[0, 255]``.
+        phase_text: Corresponding nonnegative phase samples in radians.  Values
+            above ``2*pi`` are accepted and truncated during inverse mapping.
+
+    Returns:
+        A validated ``float64`` array with shape ``(N, 2)``.
+
+    Raises:
+        ValueError: If either input is empty or nonnumeric, sample counts do
+            not match, fewer than two points are supplied, ranges are invalid,
+            gray samples repeat, or phase is not strictly monotonic.
+    """
+
+    gray_values = _parse_numeric_sequence(gray_text, "灰度值")
+    phase_values = _parse_numeric_sequence(phase_text, "相位值")
+    if gray_values.size != phase_values.size:
+        raise ValueError("灰度值与相位值的数量必须相同")
+    if gray_values.size < 2:
+        raise ValueError("灰度—相位映射至少需要两个数据点")
+
+    response = np.column_stack((gray_values, phase_values))
+    response = response[np.argsort(response[:, 0], kind="stable")]
+    try:
+        gray2phase(response[:, 0], response)
+        phase2gray(np.asarray([0.0], dtype=np.float64), response)
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"灰度—相位映射无效：{error}") from error
+    return np.asarray(response, dtype=np.float64)
 
 
 def prepare_grayscale(image: np.ndarray) -> _FloatArray:
@@ -108,14 +151,18 @@ def prepare_grayscale(image: np.ndarray) -> _FloatArray:
     return converted
 
 
-def calibrate_image(image: np.ndarray, coefficients: ArrayLike) -> _ByteArray:
+def calibrate_image(
+    image: np.ndarray,
+    coefficients: ArrayLike,
+    response_data: ArrayLike | None = None,
+) -> _ByteArray:
     """Correct one image with a rectangular Zernike aberration model.
 
     For an image with original gray value ``g``, the calculation is::
 
-        phase = g / 255 * 2*pi
+        phase = g / 255 * pi
         phase_calibrated = phase - rect_zernike_recon(X, Y, coefficients)
-        gray_calibrated = mod(phase_calibrated, 2*pi) / (2*pi) * 255
+        gray_calibrated = phase2gray(mod(phase_calibrated, 2*pi), response_data)
 
     ``X`` and ``Y`` are unit-spaced pixel-coordinate matrices matching the
     image dimensions.  Results are rounded to the nearest eight-bit value.
@@ -123,6 +170,9 @@ def calibrate_image(image: np.ndarray, coefficients: ArrayLike) -> _ByteArray:
     Args:
         image: A valid single-active-channel image.
         coefficients: Non-empty vector for consecutive one-based Noll modes.
+        response_data: Measured ``(gray, phase)`` samples used only for the
+            inverse piecewise-linear phase-to-gray conversion.  ``None`` uses
+            the endpoints ``(0, 0)`` and ``(255, 2*pi)``.
 
     Returns:
         A two-dimensional ``uint8`` corrected image.
@@ -134,27 +184,46 @@ def calibrate_image(image: np.ndarray, coefficients: ArrayLike) -> _ByteArray:
 
     grayscale = prepare_grayscale(image)
     coefficient_array = _validate_coefficients(coefficients)
+    response = _DEFAULT_RESPONSE if response_data is None else response_data
     height, width = grayscale.shape
     aberration = _cached_aberration(
         height,
         width,
         tuple(float(value) for value in coefficient_array),
     )
-    phase = np.asarray(grayscale, dtype=np.float32) * np.float32(_TWO_PI / 255)
+    phase = gray2phase(grayscale, response)
     calibrated_phase = np.mod(phase - aberration, _TWO_PI)
-    calibrated_gray = calibrated_phase / _TWO_PI * 255
+    calibrated_gray = phase2gray(calibrated_phase, response)
     result: _ByteArray = np.asarray(np.rint(calibrated_gray), dtype=np.uint8)
     return result
 
 
-def preload_correction_cache() -> bool:
+def _parse_numeric_sequence(text: str, name: str) -> _FloatArray:
+    stripped = text.strip(" \t\r\n,")
+    if not stripped:
+        raise ValueError(f"请输入{name}")
+    try:
+        values = np.asarray(
+            [float(token) for token in _COEFFICIENT_SEPARATOR.split(stripped)],
+            dtype=np.float64,
+        )
+    except ValueError as error:
+        raise ValueError(f"{name}必须是用逗号或空白分隔的数字") from error
+    return values
+
+
+def preload_correction_cache(filename: str | Path | None = None) -> bool:
     """Memory-map the packaged 1920x1080 mode cache.
+
+    Args:
+        filename: Optional explicit cache path.  ``None`` checks both packaged
+            and per-user cache locations.
 
     Returns:
         ``True`` when the cache is available and valid, otherwise ``False``.
     """
 
-    return load_standard_mode_cache() is not None
+    return load_standard_mode_cache(filename) is not None
 
 
 def clear_calibration_cache() -> None:

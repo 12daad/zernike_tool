@@ -5,6 +5,7 @@ from .correction import (
     clear_calibration_cache,
     corrected_output_name,
     parse_coefficients,
+    parse_response_curve,
     preload_correction_cache,
     prepare_grayscale,
 )
@@ -14,6 +15,7 @@ __all__ = [
     "clear_calibration_cache",
     "corrected_output_name",
     "parse_coefficients",
+    "parse_response_curve",
     "preload_correction_cache",
     "prepare_grayscale",
 ]

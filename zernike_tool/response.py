@@ -33,8 +33,8 @@ def response_data(filename: str | Path) -> _FloatArray:
     Raises:
         OSError: If the file cannot be read.
         ValueError: If a row is malformed, fewer than two samples are present,
-            gray levels are duplicated, or values fall outside gray ``[0, 255]``
-            and phase ``[0, 2*pi]``.
+            gray levels are duplicated, gray lies outside ``[0, 255]``, or a
+            phase value is negative.
     """
 
     path = Path(filename)
@@ -76,16 +76,17 @@ def response_data(filename: str | Path) -> _FloatArray:
 
 
 def gray2phase(gray: np.ndarray, data: ArrayLike) -> _FloatArray:
-    """Map gray levels to phase using piecewise-linear interpolation.
+    """Map design gray levels linearly onto the phase interval ``[0, pi]``.
 
-    Values between measured gray levels are linearly interpolated.  When the
-    measurements do not include gray 0 or 255, values outside the measured
-    interval are clamped to the nearest measured phase rather than extrapolated.
+    The forward conversion represents the design assumption and is always
+    ``phase = gray / 255 * pi``.  Measured response data is validated for API
+    consistency but is used only by :func:`phase2gray`.
 
     Args:
         gray: Real numeric gray-level array whose values lie in ``[0, 255]``.
         data: Response data returned by :func:`response_data`, or another
-            two-column array containing ``(gray, phase)`` samples.
+            two-column array containing ``(gray, phase)`` samples.  It is
+            validated but does not alter the forward linear mapping.
 
     Returns:
         A ``float64`` phase array with the same shape as ``gray``.
@@ -96,11 +97,8 @@ def gray2phase(gray: np.ndarray, data: ArrayLike) -> _FloatArray:
     """
 
     gray_values = _validate_values(gray, "gray", 255.0)
-    response = _validate_response_data(data)
-    return np.asarray(
-        np.interp(gray_values, response[:, 0], response[:, 1]),
-        dtype=np.float64,
-    )
+    _validate_response_data(data)
+    return np.asarray(gray_values / 255.0 * np.pi, dtype=np.float64)
 
 
 def phase2gray(phase: np.ndarray, data: ArrayLike) -> _FloatArray:
@@ -108,9 +106,10 @@ def phase2gray(phase: np.ndarray, data: ArrayLike) -> _FloatArray:
 
     The measured phase column must be strictly monotonic so that the inverse is
     unique.  Both increasing and decreasing response curves are supported.
-    Values outside the measured phase interval are clamped to its endpoint gray
-    levels.  Fractional gray levels are retained; callers may round or quantize
-    them according to their hardware requirements.
+    A measured response may exceed ``2*pi``; the inverse curve is truncated at
+    an interpolated ``2*pi`` crossing before conversion.  Consequently, the
+    maximum returned gray level may be lower than 255.  Fractional gray levels
+    are retained so callers can choose their own quantization rule.
 
     Args:
         phase: Real numeric phase array in radians with values in ``[0, 2*pi]``.
@@ -139,7 +138,22 @@ def phase2gray(phase: np.ndarray, data: ArrayLike) -> _FloatArray:
         raise ValueError(
             "Response phase must be strictly monotonic for inverse mapping"
         )
+    phase_axis, gray_axis = _truncate_phase_axis(phase_axis, gray_axis)
     return np.asarray(np.interp(phase_values, phase_axis, gray_axis), dtype=np.float64)
+
+
+def _truncate_phase_axis(
+    phase_axis: _FloatArray,
+    gray_axis: _FloatArray,
+) -> tuple[_FloatArray, _FloatArray]:
+    if phase_axis[-1] <= _TWO_PI:
+        return phase_axis, gray_axis
+
+    cutoff_gray = float(np.interp(_TWO_PI, phase_axis, gray_axis))
+    retained = phase_axis < _TWO_PI
+    truncated_phase = np.append(phase_axis[retained], _TWO_PI)
+    truncated_gray = np.append(gray_axis[retained], cutoff_gray)
+    return truncated_phase, truncated_gray
 
 
 def _split_row(line: str) -> list[str]:
@@ -188,5 +202,5 @@ def _validate_response_ranges(data: _FloatArray) -> None:
         raise ValueError("Response data must contain only finite values")
     if np.any((data[:, 0] < 0) | (data[:, 0] > 255)):
         raise ValueError("Response gray levels must lie in [0, 255]")
-    if np.any((data[:, 1] < 0) | (data[:, 1] > _TWO_PI)):
-        raise ValueError("Response phases must lie in [0, 2*pi]")
+    if np.any(data[:, 1] < 0):
+        raise ValueError("Response phases must be nonnegative")

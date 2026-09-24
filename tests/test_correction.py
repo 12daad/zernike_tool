@@ -9,11 +9,13 @@ from unittest.mock import patch
 
 import numpy as np
 
-from app import (
+from zernike_tool import gray2phase, phase2gray
+from zernike_tool.app import (
     calibrate_image,
     clear_calibration_cache,
     corrected_output_name,
     parse_coefficients,
+    parse_response_curve,
     preload_correction_cache,
     prepare_grayscale,
 )
@@ -40,6 +42,50 @@ class CoefficientParsingTests(TestCase):
         for text, message in cases:
             with self.subTest(text=text), self.assertRaisesRegex(ValueError, message):
                 parse_coefficients(text)
+
+
+class ResponseCurveParsingTests(TestCase):
+    """Verify paired gray and phase response text parsing."""
+
+    def test_parses_separators_and_sorts_by_gray(self) -> None:
+        """Keep gray/phase pairs aligned while sorting the gray axis."""
+
+        actual = parse_response_curve("255, 0 128", "6.5\n0, 2.9")
+        np.testing.assert_array_equal(actual[:, 0], [0, 128, 255])
+        np.testing.assert_array_equal(actual[:, 1], [0, 2.9, 6.5])
+        self.assertEqual(actual.dtype, np.float64)
+
+    def test_rejects_malformed_or_mismatched_sequences(self) -> None:
+        """Reject missing, nonnumeric, mismatched, and undersized inputs."""
+
+        cases = [
+            ("", "0, 1", "请输入灰度值"),
+            ("0, bad", "0, 1", "灰度值必须是"),
+            ("0, 255", "0", "数量必须相同"),
+            ("0", "0", "至少需要两个"),
+        ]
+        for gray_text, phase_text, message in cases:
+            with (
+                self.subTest(message=message),
+                self.assertRaisesRegex(ValueError, message),
+            ):
+                parse_response_curve(gray_text, phase_text)
+
+    def test_rejects_invalid_ranges_duplicates_and_nonmonotonic_phase(self) -> None:
+        """Apply the response conversion API's range and inverse rules."""
+
+        cases = [
+            ("0, 256", "0, 1", "gray values"),
+            ("0, 255", "0, -0.1", "nonnegative"),
+            ("0, 0", "0, 1", "duplicate gray"),
+            ("0, 128, 255", "0, 2, 1", "strictly monotonic"),
+        ]
+        for gray_text, phase_text, message in cases:
+            with (
+                self.subTest(message=message),
+                self.assertRaisesRegex(ValueError, message),
+            ):
+                parse_response_curve(gray_text, phase_text)
 
 
 class GrayscalePreparationTests(TestCase):
@@ -117,12 +163,12 @@ class ImageCalibrationTests(TestCase):
 
         clear_calibration_cache()
 
-    def test_zero_aberration_preserves_non_wrapping_gray_values(self) -> None:
-        """Round-trip gray through phase when the aberration is zero."""
+    def test_default_inverse_maps_design_pi_range_to_half_gray_range(self) -> None:
+        """Use pi for the design phase and two-pi for the default response."""
 
         image = np.array([[0, 64], [128, 254]], dtype=np.uint8)
         actual = calibrate_image(image, 0.0)
-        np.testing.assert_array_equal(actual, image)
+        np.testing.assert_array_equal(actual, [[0, 32], [64, 127]])
         self.assertEqual(actual.dtype, np.uint8)
 
     def test_applies_aberration_and_accepts_column_coefficients(self) -> None:
@@ -137,11 +183,31 @@ class ImageCalibrationTests(TestCase):
         self.assertGreaterEqual(int(actual.min()), 0)
         self.assertLessEqual(int(actual.max()), 255)
 
+    def test_uses_design_forward_and_measured_inverse_mappings(self) -> None:
+        """Use linear design phase and measured inverse response in correction."""
+
+        image = np.array([[32, 96], [160, 224]], dtype=np.uint8)
+        response = np.array(
+            [[0.0, 0.0], [128.0, 1.5], [255.0, 2 * np.pi]],
+            dtype=np.float64,
+        )
+        aberration = np.full(image.shape, 0.2, dtype=np.float32)
+        with patch(
+                "zernike_tool.app.correction._cached_aberration",
+                return_value=aberration,
+        ):
+            actual = calibrate_image(image, [0.0], response)
+
+        corrected_phase = np.mod(gray2phase(image, response) - aberration, 2 * np.pi)
+        expected = np.rint(phase2gray(corrected_phase, response)).astype(np.uint8)
+        np.testing.assert_array_equal(actual, expected)
+        self.assertEqual(actual.dtype, np.uint8)
+
     def test_reuses_aberration_for_matching_shape_and_coefficients(self) -> None:
         """Avoid rebuilding modes for every image in a same-sized batch."""
 
         image = np.full((4, 4), 64, dtype=np.uint8)
-        with patch("app.correction.rect_zernike_recon") as reconstruct:
+        with patch("zernike_tool.app.correction.rect_zernike_recon") as reconstruct:
             reconstruct.return_value = np.zeros((4, 4), dtype=np.float64)
             calibrate_image(image, [0.0])
             calibrate_image(image + 1, [0.0])
@@ -152,17 +218,17 @@ class ImageCalibrationTests(TestCase):
 
         image = np.full((4, 4), 64, dtype=np.uint8)
         patches = (
-            patch("app.correction.STANDARD_HEIGHT", 4),
-            patch("app.correction.STANDARD_WIDTH", 4),
+            patch("zernike_tool.app.correction.STANDARD_HEIGHT", 4),
+            patch("zernike_tool.app.correction.STANDARD_WIDTH", 4),
         )
         with (
             patches[0],
             patches[1],
             patch(
-                "app.correction.reconstruct_standard_aberration",
+                "zernike_tool.app.correction.reconstruct_standard_aberration",
                 return_value=np.zeros((4, 4), dtype=np.float32),
             ) as standard,
-            patch("app.correction.rect_zernike_recon") as realtime,
+            patch("zernike_tool.app.correction.rect_zernike_recon") as realtime,
         ):
             calibrate_image(image, [0.0])
         self.assertEqual(standard.call_count, 1)
@@ -173,10 +239,10 @@ class ImageCalibrationTests(TestCase):
             patches[0],
             patches[1],
             patch(
-                "app.correction.reconstruct_standard_aberration",
+                "zernike_tool.app.correction.reconstruct_standard_aberration",
                 return_value=None,
             ),
-            patch("app.correction.rect_zernike_recon") as realtime,
+            patch("zernike_tool.app.correction.rect_zernike_recon") as realtime,
         ):
             realtime.return_value = np.zeros((4, 4), dtype=np.float64)
             calibrate_image(image, [0.1])
@@ -185,10 +251,19 @@ class ImageCalibrationTests(TestCase):
     def test_preloads_standard_cache(self) -> None:
         """Report whether startup successfully mapped the standard cache."""
 
-        with patch("app.correction.load_standard_mode_cache", return_value=np.ones(1)):
+        with patch(
+                "zernike_tool.app.correction.load_standard_mode_cache",
+                return_value=np.ones(1),
+        ) as load:
             self.assertTrue(preload_correction_cache())
-        with patch("app.correction.load_standard_mode_cache", return_value=None):
-            self.assertFalse(preload_correction_cache())
+            load.assert_called_once_with(None)
+        with patch(
+                "zernike_tool.app.correction.load_standard_mode_cache",
+                return_value=None,
+        ) as load:
+            filename = Path("custom.npy")
+            self.assertFalse(preload_correction_cache(filename))
+            load.assert_called_once_with(filename)
 
     def test_rejects_invalid_coefficient_arrays(self) -> None:
         """Reject nonnumeric, nonvector, empty, and non-finite coefficients."""

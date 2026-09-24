@@ -1,11 +1,12 @@
 [project]
 name = "zernike-tool"
-version = "0.4.0"
+version = "0.8.0"
 description = "Rectangular Zernike analysis and batch image correction"
 requires-python = ">=3.14"
 dependencies = [
     "numpy>=2.3",
     "pillow>=11.3",
+    "tkinterdnd2>=0.6.3",
 ]
 
 [dependency-groups]
@@ -16,7 +17,7 @@ dev = [
 ]
 
 [project.gui-scripts]
-zernike-corrector = "app.gui:launch"
+zernike-corrector = "zernike_tool.app.gui:launch"
 
 [build-system]
 requires = ["hatchling"]
@@ -24,10 +25,10 @@ build-backend = "hatchling.build"
 
 [tool.coverage.run]
 branch = true
-source = ["zernike_tool", "app"]
+source = ["zernike_tool"]
 # Native Tk widgets and event-loop callbacks require a graphical Windows
-# session. Their domain logic is isolated in app/correction.py and unit tested.
-omit = ["app/gui.py", "app/__main__.py"]
+# session. Their domain logic is isolated in zernike_tool/app/correction.py.
+omit = ["zernike_tool/app/gui.py", "zernike_tool/app/__main__.py"]
 
 [tool.coverage.report]
 fail_under = 100
@@ -40,10 +41,11 @@ target-version = "py314"
 [tool.mypy]
 python_version = "3.14"
 strict = true
-files = ["zernike_tool", "app"]
+files = ["zernike_tool"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["zernike_tool", "app"]
+packages = ["zernike_tool"]
 
 [tool.hatch.build]
 artifacts = ["zernike_tool/data/*.npy"]
+exclude = ["~$*", "*.xlsx"]
