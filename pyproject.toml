@@ -49,3 +49,6 @@ packages = ["zernike_tool"]
 [tool.hatch.build]
 artifacts = ["zernike_tool/data/*.npy"]
 exclude = ["~$*", "*.xlsx"]
+
+[tool.uv]
+package = false
